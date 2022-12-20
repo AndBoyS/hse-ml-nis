@@ -7,7 +7,7 @@
 Запуск инференса:
 
 ```shell
-TODO
+python main.py path/to/image/folder
 ```
 
 Запуск инференса в докере:
