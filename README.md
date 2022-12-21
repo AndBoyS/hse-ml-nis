@@ -15,8 +15,14 @@ python main.py path/to/image/folder
 Запуск инференса в докере:
 
 ```shell
-TODO
+docker build -t glasses . && docker run glasses -v demo_data:/app/demo_data -p 7860:7860
 ```
+
+Затем откройте http://localhost:7860 в браузере.
+
+gif-ка с примером работы:
+
+![usage](usage.gif)
 
 
 ### Для коллабораторов 
