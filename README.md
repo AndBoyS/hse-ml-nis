@@ -20,7 +20,7 @@ docker build -t glasses . && docker run -v $(pwd)/demo_data:/app/demo_data -p 78
 
 Затем откройте http://localhost:7860 в браузере. 
 К сожалению, в докере не работает кеб-камера.
-Решить проблемы можно [вот так](https://medium.com/@jijupax/connect-the-webcam-to-docker-on-mac-or-windows-51d894c44468), но это муторно.
+Решить проблему можно [вот так](https://medium.com/@jijupax/connect-the-webcam-to-docker-on-mac-or-windows-51d894c44468), но это муторно.
 
 Проще запустить локально:
 
