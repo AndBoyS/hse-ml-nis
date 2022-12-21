@@ -5,6 +5,10 @@ import gradio as gr
 
 from pkg import models
 
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning)
+
 
 def detect_glasses(model: str, im: np.ndarray) -> str:
     """
@@ -19,7 +23,7 @@ def detect_glasses(model: str, im: np.ndarray) -> str:
 
     Returns
     -------
-    float
+    str
         The probability of the person wearing glasses.
     """
     m = models.GlassProbaPredictor(model)
