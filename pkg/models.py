@@ -9,7 +9,8 @@ class GlassProbaPredictor(nn.Module):
     Предсказывает вероятность нахождения на фото очков
     """
 
-    glasses_class = None  # Класс очков
+    feature_extractor: nn.Module
+    model: nn.Module
 
     def __init__(
             self,
@@ -25,14 +26,18 @@ class GlassProbaPredictor(nn.Module):
 
         super().__init__()
 
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(hf_model_name)
-        self.model = AutoModelForImageClassification.from_pretrained(hf_model_name)
+        self.model_name = hf_model_name
+        self._init_model(hf_model_name)
         self.glasses_class = self.model.config.label2id[glasses_class_name]
+
+    def _init_model(self, model_name):
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
+        self.model = AutoModelForImageClassification.from_pretrained(model_name)
 
     def forward(self, x):
         inputs = self.feature_extractor(x, return_tensors="pt")
-        logits = self.model(**inputs).logits
-        return logits
+        pred = self.model(**inputs)
+        return pred
 
     def predict_proba(self, x):
         """
