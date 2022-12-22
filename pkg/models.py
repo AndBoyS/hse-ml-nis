@@ -44,7 +44,7 @@ class GlassProbaPredictor(nn.Module):
         Предсказать вероятность нахождения на фото очков
         """
         with torch.no_grad():
-            pred = self(x).softmax(1)
+            pred = self(x).logits.sigmoid()
 
         glass_prob = pred[0, self.glasses_class].item()
         return glass_prob
