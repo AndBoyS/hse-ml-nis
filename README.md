@@ -15,8 +15,22 @@ python main.py path/to/image/folder
 Запуск инференса в докере:
 
 ```shell
-TODO
+docker build -t glasses . && docker run -v $(pwd)/demo_data:/app/demo_data -p 7860:7860 glasses
 ```
+
+Затем откройте http://localhost:7860 в браузере. 
+К сожалению, в докере не работает кеб-камера.
+Решить проблему можно [вот так](https://medium.com/@jijupax/connect-the-webcam-to-docker-on-mac-or-windows-51d894c44468), но это муторно.
+
+Проще запустить локально:
+
+```shell
+python demo.py
+```
+
+gif-ка с примером работы:
+
+![usage](usage.gif)
 
 
 ### Для коллабораторов 

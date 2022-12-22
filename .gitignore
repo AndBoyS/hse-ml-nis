@@ -1,3 +1,7 @@
 .idea
 __pycache__
 data
+gradio_cached_examples
+.DS_Store
+venv
+.ipynb_checkpoints

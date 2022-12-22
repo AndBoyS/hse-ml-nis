@@ -1,0 +1,11 @@
+requirements.*
+notebooks
+gradio_cached_examples
+main.py
+demo_data
+venv
+.idea
+__pycache__
+.ipynb_checkpoints
+README.md
+usage.gif
