@@ -5,3 +5,4 @@ gradio_cached_examples
 .DS_Store
 venv
 .ipynb_checkpoints
+lightning_logs

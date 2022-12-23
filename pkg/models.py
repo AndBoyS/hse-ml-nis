@@ -1,6 +1,8 @@
+import warnings
 import torch
 from torch import nn
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
+import pytorch_lightning as pl
 
 
 class GlassProbaPredictor(nn.Module):
@@ -27,6 +29,8 @@ class GlassProbaPredictor(nn.Module):
 
         super().__init__()
 
+        warnings.warn('This module is deprecated')
+
         self.model_name = hf_model_name
         self._init_model(hf_model_name)
         self.glasses_class = self.model.config.label2id[glasses_class_name]
@@ -49,3 +53,65 @@ class GlassProbaPredictor(nn.Module):
 
         glass_prob = pred[0, self.glasses_class].item()
         return glass_prob
+
+
+class GlassProbaPredictorTrained(pl.LightningModule):
+    def __init__(
+            self,
+            hf_model_name: str,
+    ):
+        """
+        hf_model_name: str
+            Название предобученной модели на huggingface (например 'microsoft/resnet-50')
+        """
+        super().__init__()
+        self.model_name = hf_model_name
+        self._init_model(hf_model_name)
+        self.loss = nn.BCELoss()
+
+    def _init_model(self, model_name):
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
+        self.body = AutoModelForImageClassification.from_pretrained(model_name)
+
+        # Замораживаем все кроме выходного слоя
+        for param in self.parameters():
+            param.requires_grad = False
+
+        # Сетап для предобученных моделей microsoft/resnet-xx
+        in_features = self.body.classifier[-1].in_features
+
+        self.body.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(in_features, 1),
+        )
+
+    def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = self.feature_extractor(x)
+        return self.body(x).logits
+
+    def compute_loss_on_batch(self, batch):
+        im = batch['image']
+        label = batch['label']
+
+        pred = self.forward(im).sigmoid()
+        label = torch.broadcast_to(label, pred.shape).float()
+        return self.loss(pred, label)
+
+    def training_step(self, batch, batch_idx):
+        loss = self.compute_loss_on_batch(batch)
+        # Logging to TensorBoard by default
+        self.log("train_loss", loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.compute_loss_on_batch(batch)
+        self.log("val_loss", loss)
+
+    def test_step(self, batch, batch_idx):
+        loss = self.compute_loss_on_batch(batch)
+        self.log("test_loss", loss)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
