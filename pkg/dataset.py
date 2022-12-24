@@ -70,25 +70,15 @@ class MeGlassDataset(torch.utils.data.Dataset):
     def _create_default_transform(self):
 
         return T.Compose([
-            T.Lambda(lambda img: img.convert('RGB')),
-            T.RandomHorizontalFlip(),
-            #T.Lambda(lambda img: self.feature_extractor(np.array(img))),
-            #T.Lambda(lambda d: d['pixel_values'][0]),
-            #T.Lambda(lambda x: x.transpose(1, 2, 0)),
-            T.Lambda(lambda x: feature_extractor_to_numpy(
-                self.feature_extractor, x
-            )),
             T.ToTensor(),
+            T.RandomHorizontalFlip(),
             CutOut(),
-            #T.Normalize(
-            #    mean=torch.tensor(imagenet_defaults['mean']),
-            #    std=torch.tensor(imagenet_defaults['std'])
-            #),
         ])
 
     def __getitem__(self, idx):
         fp, label = self.fps_and_labels[idx]
-        im = Image.open(fp)
+        im = Image.open(fp).convert('RGB')
+        im = feature_extractor_to_numpy(self.feature_extractor, im)
         im = self.transform(im)
 
         item = {

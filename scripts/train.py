@@ -17,24 +17,34 @@ def train(
 
     dataset = MeGlassDataset(dataset_fp, label_fp)
     dataset_len = len(dataset)
+    #dataset_len = 1000
 
     idx = range(dataset_len)
     train_idx, test_idx = train_test_split(idx, test_size=0.01, random_state=42)
-    val_idx, test_idx = train_test_split(idx, test_size=0.5, random_state=42)
+    val_idx, test_idx = train_test_split(test_idx, test_size=0.5, random_state=42)
+    
+    print(f'Train size: {len(train_idx)}')
+    print(f'Val size: {len(val_idx)}')
+    print(f'Test size: {len(test_idx)}')
 
     train_dataset = MeGlassDataset(dataset_fp, label_fp, idx=train_idx)
     val_dataset = MeGlassDataset(dataset_fp, label_fp, idx=val_idx)
     test_dataset = MeGlassDataset(dataset_fp, label_fp, idx=test_idx)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset)
-    val_loader = torch.utils.data.DataLoader(val_dataset)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, 
+        batch_size=100,
+        num_workers=8,
+    )
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=100)
     test_loader = torch.utils.data.DataLoader(test_dataset)
 
     model = GlassProbaPredictorTrained(model_name)
     trainer = pl.Trainer(
-        limit_train_batches=100,
-        max_epochs=1,
+        log_every_n_steps=10,
+        #max_epochs=1,
         auto_lr_find=True,
+        accelerator="gpu",
     )
     trainer.fit(
         model,

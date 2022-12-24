@@ -59,6 +59,8 @@ class GlassProbaPredictorTrained(pl.LightningModule):
     def __init__(
             self,
             hf_model_name: str,
+            learning_rate: float = 1e-3,
+            warmup_steps: int = 50000,
     ):
         """
         hf_model_name: str
@@ -68,6 +70,9 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         self.model_name = hf_model_name
         self._init_model(hf_model_name)
         self.loss = nn.BCELoss()
+        self.warmup_steps = warmup_steps
+        self.save_hyperparameters()
+        
 
     def _init_model(self, model_name):
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
@@ -95,8 +100,10 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         label = batch['label']
 
         pred = self.forward(im).sigmoid()
-        label = torch.broadcast_to(label, pred.shape).float()
-        return self.loss(pred, label)
+        pred = pred.squeeze()
+        label = label.float()
+        loss = self.loss(pred, label)
+        return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.compute_loss_on_batch(batch)
@@ -113,5 +120,45 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         self.log("test_loss", loss)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
+    
+    # learning rate warm-up
+    def optimizer_step(
+        self,
+        epoch,
+        batch_idx,
+        optimizer,
+        optimizer_idx,
+        optimizer_closure,
+        on_tpu=False,
+        using_native_amp=False,
+        using_lbfgs=False,
+    ):
+        # update params
+        optimizer.step(closure=optimizer_closure)
+
+        current_lr = self.get_warmup_lr(
+            self.trainer.global_step,
+            self.hparams.learning_rate,
+            self.warmup_steps,
+        )
+        
+        self.set_optimizer_lr(optimizer, current_lr)
+        self.log("lr", current_lr)
+        
+    @staticmethod
+    def get_warmup_lr(cur_step, base_lr, warmup_steps):
+        # Linear warmup 
+        current_lr = base_lr
+        if cur_step < warmup_steps:
+            lr_scale = min(1.0, float(cur_step + 1) / warmup_steps)
+            current_lr = lr_scale * current_lr
+            
+        return current_lr
+    
+    @staticmethod
+    def set_optimizer_lr(optimizer, lr):
+        for pg in optimizer.param_groups:
+            pg["lr"] = lr
+    
