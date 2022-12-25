@@ -14,14 +14,17 @@ def train(
         label_fp: Union[Path, str],
         model_name: str = 'microsoft/resnet-18',
         ):
-
+    
     dataset = MeGlassDataset(dataset_fp, label_fp)
     dataset_len = len(dataset)
     dataset_len = 10
 
-    idx = range(dataset_len)
-    train_idx, test_idx = train_test_split(idx, test_size=0.01, random_state=42)
-    val_idx, test_idx = train_test_split(test_idx, test_size=0.5, random_state=42)
+    train_idx = range(dataset_len)
+    train_idx, test_idx = train_test_split(train_idx, test_size=0.01, random_state=42)
+    try:
+        val_idx, test_idx = train_test_split(test_idx, test_size=0.5, random_state=42)
+    except ValueError:
+        val_idx = []
     
     print(f'Train size: {len(train_idx)}')
     print(f'Val size: {len(val_idx)}')
@@ -42,11 +45,15 @@ def train(
     accelerator = 'gpu' if torch.cuda.is_available() else 'cpu'
 
     model = GlassProbaPredictorTrained(model_name)
+    
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
+    
     trainer = pl.Trainer(
         log_every_n_steps=10,
         #max_epochs=1,
         auto_lr_find=True,
         accelerator=accelerator,
+        callbacks=[lr_monitor],
     )
     trainer.fit(
         model,

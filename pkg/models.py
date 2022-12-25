@@ -1,5 +1,6 @@
 import warnings
 from typing import List
+from collections import Counter
 
 import torch
 from torch import nn
@@ -62,8 +63,10 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             self,
             hf_model_name: str,
             learning_rate: float = 1e-3,
-            warmup_steps: int = 10000,
-            milestones: List[int] = [20000, 25000, 30000],
+            #warmup_steps: int = 10000,
+            warmup_steps: int = 10,
+            #milestones: List[int] = [20000, 25000, 30000],
+            milestones: List[int] = [20, 30, 40],
             gamma: float = 0.1,
     ):
         """
@@ -81,8 +84,8 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         self.warmup_steps = warmup_steps
         self.gamma = gamma
         self.milestones = milestones
+        # self.milestones_counter = Counter(milestones)
         self.save_hyperparameters()
-        
 
     def _init_model(self, model_name):
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
@@ -131,38 +134,64 @@ class GlassProbaPredictorTrained(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
-        return optimizer
-    
-    # learning rate warm-up + learning rate decay
-    def optimizer_step(
-        self,
-        epoch,
-        batch_idx,
-        optimizer,
-        optimizer_idx,
-        optimizer_closure,
-        on_tpu=False,
-        using_native_amp=False,
-        using_lbfgs=False,
-    ):
-        # update params
-        optimizer.step(closure=optimizer_closure)
-
-        current_lr = self.get_warmup_lr(
-            self.trainer.global_step,
-            self.hparams.learning_rate,
-            self.warmup_steps,
-        )
-
-        current_lr = self.get_decay_lr(
-            self.trainer.global_step,
-            current_lr,
-            self.milestones,
-            self.gamma,
+        
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, 
+            milestones=self.milestones,
+            gamma=self.gamma,
         )
         
-        self.set_optimizer_lr(optimizer, current_lr)
-        self.log("lr", current_lr)
+        scheduler = WarmUpScheduler(
+            optimizer, 
+            scheduler,
+            len_loader=1,
+            warmup_steps=self.warmup_steps,
+            warmup_start_lr=1e-7,
+            warmup_mode='linear',
+        )
+        
+        #scheduler = create_lr_scheduler_with_warmup(
+        #    scheduler,
+        #    warmup_start_value=1e-7,
+        #    warmup_duration=self.warmup_steps,
+        #)
+        
+        scheduler_config = {
+            'scheduler': scheduler,
+            'name': 'multisteplr',
+        }
+        return [optimizer], [scheduler_config]
+    
+    # learning rate warm-up + learning rate decay
+    #def optimizer_step(
+    #    self,
+    #    epoch,
+    #    batch_idx,
+    #    optimizer,
+    #    optimizer_idx,
+    #    optimizer_closure,
+    #    on_tpu=False,
+    #    using_native_amp=False,
+    #    using_lbfgs=False,
+    #):
+    #    # update params
+    #    optimizer.step(closure=optimizer_closure)
+#
+    #    current_lr = self.get_warmup_lr(
+    #        self.trainer.global_step,
+    #        self.hparams.learning_rate,
+    #        self.warmup_steps,
+    #    )
+    #    
+    #    #current_lr = self.get_decay_lr(
+    #    #    self.trainer.global_step,
+    #    #    current_lr,
+    #    #    self.milestones_counter,
+    #    #    self.gamma,
+    #    #)
+    #    
+    #    self.set_optimizer_lr(optimizer, current_lr)
+    #    self.log("lr", current_lr)
         
     @staticmethod
     def get_warmup_lr(cur_step, base_lr, warmup_steps):
