@@ -26,6 +26,7 @@ class MeGlassDataset(torch.utils.data.Dataset):
                  transform: Optional[T.Compose] = None,
                  idx: Optional[List[int]] = None,
                  hf_model_name: str = 'microsoft/resnet-18',
+                 is_train: bool = True,
                  ):
         """
         Датасет MeGlass (https://github.com/cleardusk/MeGlass)
@@ -40,9 +41,12 @@ class MeGlassDataset(torch.utils.data.Dataset):
             Список айди фоток, которые нужно использовать (при None используются все фото)
         :param hf_model_name:
             Название предобученной модели на huggingface (например 'microsoft/resnet-50')
+        :param is_train:
+            Использовать ли Аугментации
         """
         self.dataset_fp = Path(dataset_fp)
         self.idx = idx
+        self.is_train = is_train
         self._create_label_dict(labels_fp)
         self.transform = transform
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(hf_model_name)
@@ -68,22 +72,29 @@ class MeGlassDataset(torch.utils.data.Dataset):
             self.fps_and_labels = [self.fps_and_labels[i] for i in self.idx]
 
     def _create_default_transform(self):
-
-        return T.Compose([
+        
+        transforms = [
             T.ToTensor(),
-            T.RandomHorizontalFlip(),
-            CutOut(),
-        ])
+        ]
+        if self.is_train:
+            transforms.extend([
+                T.RandomHorizontalFlip(),
+                CutOut(),
+            ])
+
+        return T.Compose(transforms)
 
     def __getitem__(self, idx):
         fp, label = self.fps_and_labels[idx]
-        im = Image.open(fp).convert('RGB')
+        orig_im = Image.open(fp).convert('RGB')
+        im = orig_im
         im = feature_extractor_to_numpy(self.feature_extractor, im)
         im = self.transform(im)
 
         item = {
             'image': im,
             'label': label,
+            'original_image': self.transform(orig_im),
         }
         return item
 

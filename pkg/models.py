@@ -1,10 +1,14 @@
 import warnings
 from typing import List
 
+from PIL import Image
 import torch
 from torch import nn
+import torchvision.transforms as T
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
 import pytorch_lightning as pl
+
+from .utils import feature_extractor_to_numpy
 
 
 class GlassProbaPredictor(nn.Module):
@@ -61,12 +65,11 @@ class GlassProbaPredictorTrained(pl.LightningModule):
     def __init__(
             self,
             hf_model_name: str,
-            learning_rate: float = 1e-3,
-            #warmup_steps: int = 10000,
-            warmup_steps: int = 60,
-            #milestones: List[int] = [20000, 25000, 30000],
-            milestones: List[int] = [100, 130, 150],
+            learning_rate: float = 1e-2,
+            warmup_steps: int = 2,
+            milestones: List[int] = [1000, 2000, 3000],
             gamma: float = 0.1,
+            train_only_last_layer: bool = False,
     ):
         """
         hf_model_name: str
@@ -75,23 +78,26 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             Список эпох для learning rate decay
         gamma: float
             Множитель в learning rate decay
+        train_only_last_layer: bool
+            Заморозить ли все веса кроме последнего слоя
         """
         super().__init__()
         self.model_name = hf_model_name
-        self._init_model(hf_model_name)
+        self._init_model(hf_model_name, train_only_last_layer)
         self.loss = nn.BCELoss()
         self.warmup_steps = warmup_steps
         self.gamma = gamma
         self.milestones = milestones
         self.save_hyperparameters()
 
-    def _init_model(self, model_name):
+    def _init_model(self, model_name, train_only_last_layer):
         self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name)
         self.body = AutoModelForImageClassification.from_pretrained(model_name)
 
         # Замораживаем все кроме выходного слоя
-        for param in self.parameters():
-            param.requires_grad = False
+        if train_only_last_layer:
+            for param in self.parameters():
+                param.requires_grad = False
 
         # Сетап для предобученных моделей microsoft/resnet-xx
         in_features = self.body.classifier[-1].in_features
@@ -102,9 +108,14 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         )
 
     def forward(self, x):
-        if not isinstance(x, torch.Tensor):
-            x = self.feature_extractor(x)
-        return self.body(x).logits
+        if isinstance(x, Image.Image):
+            x = feature_extractor_to_numpy(self.feature_extractor, x)
+            x = T.ToTensor()(x)[None, ...]
+        elif not isinstance(x, torch.Tensor):
+            raise ValueError(f'Input should be either PIL.Image or torch.Tensor from dataset dataloader, got {type(x)}')
+            
+        x = self.body(x).logits 
+        return x
 
     def compute_loss_on_batch(self, batch):
         im = batch['image']
@@ -131,7 +142,12 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         self.log("test_loss", loss)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = torch.optim.SGD(
+            self.parameters(), 
+            lr=self.hparams.learning_rate,
+            weight_decay=1e-3,
+        )
         return optimizer
     
     # learning rate warm-up + learning rate decay
@@ -176,8 +192,6 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         
         factor = self._get_decay_lr_factor(cur_step)
         new_lr = cur_lr * self.gamma ** factor
-        
-        self.log('decay_lr', new_lr)
         return new_lr
     
     def _get_decay_lr_factor(self, cur_step):
