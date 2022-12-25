@@ -1,4 +1,6 @@
 import warnings
+from typing import List
+
 import torch
 from torch import nn
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification
@@ -60,17 +62,25 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             self,
             hf_model_name: str,
             learning_rate: float = 1e-3,
-            warmup_steps: int = 50000,
+            warmup_steps: int = 10000,
+            milestones: List[int] = [20000, 25000, 30000],
+            gamma: float = 0.1,
     ):
         """
         hf_model_name: str
             Название предобученной модели на huggingface (например 'microsoft/resnet-50')
+        milestones: List[int]
+            Список эпох для learning rate decay
+        gamma: float
+            Множитель в learning rate decay
         """
         super().__init__()
         self.model_name = hf_model_name
         self._init_model(hf_model_name)
         self.loss = nn.BCELoss()
         self.warmup_steps = warmup_steps
+        self.gamma = gamma
+        self.milestones = milestones
         self.save_hyperparameters()
         
 
@@ -123,7 +133,7 @@ class GlassProbaPredictorTrained(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
     
-    # learning rate warm-up
+    # learning rate warm-up + learning rate decay
     def optimizer_step(
         self,
         epoch,
@@ -143,6 +153,13 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             self.hparams.learning_rate,
             self.warmup_steps,
         )
+
+        current_lr = self.get_decay_lr(
+            self.trainer.global_step,
+            current_lr,
+            self.milestones,
+            self.gamma,
+        )
         
         self.set_optimizer_lr(optimizer, current_lr)
         self.log("lr", current_lr)
@@ -156,6 +173,12 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             current_lr = lr_scale * current_lr
             
         return current_lr
+
+    @staticmethod
+    def get_decay_lr(cur_step, cur_lr, milestones, gamma):
+        if cur_step not in milestones:
+            return cur_lr
+        return cur_lr * gamma ** milestones[cur_step]
     
     @staticmethod
     def set_optimizer_lr(optimizer, lr):

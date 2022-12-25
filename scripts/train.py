@@ -17,7 +17,7 @@ def train(
 
     dataset = MeGlassDataset(dataset_fp, label_fp)
     dataset_len = len(dataset)
-    #dataset_len = 1000
+    dataset_len = 10
 
     idx = range(dataset_len)
     train_idx, test_idx = train_test_split(idx, test_size=0.01, random_state=42)
@@ -39,17 +39,19 @@ def train(
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=100)
     test_loader = torch.utils.data.DataLoader(test_dataset)
 
+    accelerator = 'gpu' if torch.cuda.is_available() else 'cpu'
+
     model = GlassProbaPredictorTrained(model_name)
     trainer = pl.Trainer(
         log_every_n_steps=10,
         #max_epochs=1,
         auto_lr_find=True,
-        accelerator="gpu",
+        accelerator=accelerator,
     )
     trainer.fit(
         model,
         train_loader,
-        val_loader,
+        # val_loader,
     )
 
     trainer.test(model, dataloaders=test_loader)
