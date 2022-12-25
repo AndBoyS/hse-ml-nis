@@ -57,6 +57,10 @@ class GlassProbaPredictorTrained(pl.LightningModule):
             nn.Linear(in_features, 1),
         )
 
+    def predict_proba(self, im):
+        with torch.no_grad():
+            return self.forward(im).sigmoid().item()
+
     def forward(self, x):
         if isinstance(x, Image.Image):
             x = feature_extractor_to_numpy(self.feature_extractor, x)
