@@ -23,7 +23,7 @@ def train(
     train_idx, test_idx = train_test_split(train_idx, test_size=0.01, random_state=42)
     try:
         val_idx, test_idx = train_test_split(test_idx, test_size=0.5, random_state=42)
-    except ValueError:
+    except ValueError:  # Для дебага чтоб не юзать вал
         val_idx = []
     
     print(f'Train size: {len(train_idx)}')
@@ -46,14 +46,11 @@ def train(
 
     model = GlassProbaPredictorTrained(model_name)
     
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
-    
     trainer = pl.Trainer(
         log_every_n_steps=10,
         #max_epochs=1,
         auto_lr_find=True,
         accelerator=accelerator,
-        callbacks=[lr_monitor],
     )
     trainer.fit(
         model,
